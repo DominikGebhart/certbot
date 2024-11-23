@@ -338,6 +338,16 @@ class Client:
 
         logger.debug("Will poll for certificate issuance until %s", deadline)
 
+        if hasattr(self, 'finalize_until_utc') and self.finalize_until_utc is not None:
+            now = datetime.datetime.utcnow()
+            timeout_exceeded_by = (now - self.finalize_until_utc).total_seconds()
+
+            if timeout_exceeded_by > 0:
+                msg = (f"Configured finalize-until timestamp {self.finalize_until_utc} exceeded by {timeout_exceeded_by}s"
+                    " Expecting the client to disconnect before order completion. Stopping here, no certificate will be issued")
+                logger.error(msg)
+                raise errors.Error(msg)
+
         orderr = self.acme.finalize_order(
             orderr, deadline, fetch_alternative_chains=self.config.preferred_chain is not None)
 
