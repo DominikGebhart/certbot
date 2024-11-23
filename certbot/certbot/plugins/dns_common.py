@@ -24,6 +24,7 @@ from certbot.plugins import common
 
 logger = logging.getLogger(__name__)
 
+import dns.resolver
 
 # As of writing this, the only one of our plugins that does not inherit from this class (either
 # directly or indirectly through certbot.plugins.dns_common_lexicon.LexiconDNSAuthenticator) is
@@ -45,6 +46,20 @@ class DNSAuthenticator(common.Plugin, interfaces.Authenticator, metaclass=abc.AB
             type=int,
             help='The number of seconds to wait for DNS to propagate before asking the ACME server '
                  'to verify the DNS record.')
+        add('propagation-check-nameserver',
+            default=[],
+            action="append",
+            help='TODO')
+        add('propagation-check-seconds',
+            default=[],
+            nargs='*',
+            type=int,
+            help='TODO')
+        add('propagation-check',
+            default=False,
+            type=bool,
+            help='TODO')
+
 
     def auth_hint(self, failed_achalls: List[achallenges.AnnotatedChallenge]) -> str:
         """See certbot.plugins.common.Plugin.auth_hint."""
@@ -79,6 +94,38 @@ class DNSAuthenticator(common.Plugin, interfaces.Authenticator, metaclass=abc.AB
 
             self._perform(domain, validation_domain_name, validation)
             responses.append(achall.response(achall.account_key))
+
+        if self.conf('propagation-check'):
+            for achall in achalls:
+                domain = achall.domain
+                validation_domain_name = achall.validation_domain_name(domain)
+                validation = achall.validation(achall.account_key)
+
+                pre_check_wait = self.conf('propagation-check-seconds')[0]
+                backoff_list = self.conf('propagation-check-seconds')[1:]
+                nameservers = self.conf('propagation-check-nameserver')
+                display_util.notify(f"Waiting {pre_check_wait}s before checking nameservers {nameservers}")
+                sleep(pre_check_wait)
+
+                for ip in nameservers:
+                    success = False
+
+                    resolver = dns.resolver.Resolver()
+                    resolver.nameservers = [ip]
+                    for backoff in backoff_list:
+                        try:
+                            answers = resolver.query(validation_domain_name, 'TXT')
+                            display_util.notify(f"Propagation successful for {ip}")
+                            success=True
+                            break
+                        except dns.resolver.NXDOMAIN as e:
+                            display_util.notify(f"Propagation not complete for {ip} - Waiting {backoff}s..")
+                            sleep(backoff)
+
+                    if not success: # Stop checking nameservers if the first did not propagate at all
+                        break
+
+
 
         # DNS updates take time to propagate and checking to see if the update has occurred is not
         # reliable (the machine this code is running on might be able to see an update before
