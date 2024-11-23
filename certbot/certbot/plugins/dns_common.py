@@ -96,16 +96,18 @@ class DNSAuthenticator(common.Plugin, interfaces.Authenticator, metaclass=abc.AB
             responses.append(achall.response(achall.account_key))
 
         if self.conf('propagation-check'):
+            pre_check_wait = self.conf('propagation-check-seconds')[0]
+            backoff_list = self.conf('propagation-check-seconds')[1:]
+            nameservers = self.conf('propagation-check-nameserver')
+            display_util.notify(f"Waiting {pre_check_wait}s before checking nameservers {nameservers}")
+            sleep(pre_check_wait)
+
             for achall in achalls:
                 domain = achall.domain
                 validation_domain_name = achall.validation_domain_name(domain)
                 validation = achall.validation(achall.account_key)
 
-                pre_check_wait = self.conf('propagation-check-seconds')[0]
-                backoff_list = self.conf('propagation-check-seconds')[1:]
-                nameservers = self.conf('propagation-check-nameserver')
-                display_util.notify(f"Waiting {pre_check_wait}s before checking nameservers {nameservers}")
-                sleep(pre_check_wait)
+                display_util.notify(f"Checking challenge txt record for domain {domain}")
 
                 for ip in nameservers:
                     success = False
