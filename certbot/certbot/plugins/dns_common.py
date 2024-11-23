@@ -56,8 +56,8 @@ class DNSAuthenticator(common.Plugin, interfaces.Authenticator, metaclass=abc.AB
             type=int,
             help='TODO')
         add('propagation-check',
-            default=False,
-            type=bool,
+            default=None,
+            type={'True':True,'true':True,'1':True}.get,
             help='TODO')
 
 
